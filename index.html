@@ -10,7 +10,11 @@
         input, button { width: 100%; padding: 10px; margin-top: 10px; box-sizing: border-box; }
         button { background-color: #795548; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
         ul { list-style: none; padding: 0; }
-        li { background: white; padding: 12px; margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; border-left: 5px solid #795548; }
+        li { background: white; padding: 12px; margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #795548; }
+        .action-btns { display: flex; gap: 8px; }
+        .btn-edit { background-color: #ff9800; padding: 6px 10px; font-size: 12px; width: auto; margin: 0; }
+        .btn-delete { background-color: #f44336; padding: 6px 10px; font-size: 12px; width: auto; margin: 0; }
+        .btn-cancel { background-color: #9e9e9e; display: none; }
     </style>
 </head>
 <body>
@@ -18,9 +22,11 @@
     <h2>Data Kelas</h2>
 
     <div class="card">
-        <h3>Tambah Kelas Baru</h3>
+        <h3 id="formTitle">Tambah Kelas Baru</h3>
+        <input type="hidden" id="editId">
         <input type="text" id="namaKelas" placeholder="Masukkan nama kelas (misal: X TSM)">
-        <button onclick="tambahKelas()" id="btnSimpan">Simpan</button>
+        <button onclick="simpanKelas()" id="btnSimpan">Simpan</button>
+        <button onclick="batalEdit()" id="btnBatal" class="btn-cancel">Batal Edit</button>
     </div>
 
     <h3>Daftar Kelas</h3>
@@ -48,54 +54,100 @@
 
                     data.forEach(item => {
                         let li = document.createElement('li');
-                        li.innerHTML = `<span><b>${item.nama_kelas}</b></span> <small style="color:gray">${item.id}</small>`;
+                        li.innerHTML = `
+                            <div>
+                                <b>${item.nama_kelas}</b> <br>
+                                <small style="color:gray">${item.id}</small>
+                            </div>
+                            <div class="action-btns">
+                                <button class="btn-edit" onclick="persiapanEdit('${item.id}', '${item.nama_kelas}')">✏️ Edit</button>
+                                <button class="btn-delete" onclick="hapusKelas('${item.id}', '${item.nama_kelas}')">🗑️ Hapus</button>
+                            </div>
+                        `;
                         list.appendChild(li);
                     });
                 })
                 .catch(err => {
-                    document.getElementById('loading').innerText = "Gagal memuat data. Pastikan jaringan lancar.";
+                    document.getElementById('loading').innerText = "Gagal memuat data.";
                     console.error(err);
                 });
         }
 
-        function tambahKelas() {
+        function simpanKelas() {
             const input = document.getElementById('namaKelas');
+            const editId = document.getElementById('editId').value;
             const nama = input.value.trim();
             const btn = document.getElementById('btnSimpan');
 
             if (!nama) return alert("Nama kelas tidak boleh kosong!");
 
-            btn.innerText = "Menyimpan...";
+            btn.innerText = "Proses...";
             btn.disabled = true;
 
             const formData = new URLSearchParams();
             formData.append("nama_kelas", nama);
 
+            if (editId) {
+                formData.append("action", "update");
+                formData.append("id_kelas", editId);
+            } else {
+                formData.append("action", "create");
+            }
+
             fetch(API_URL, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                },
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: formData.toString()
             })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(res => {
-                if (res.status === "success") {
-                    alert(res.message);
-                    input.value = "";
-                    muatData();
-                } else {
-                    alert("Gagal: " + res.message);
-                }
-                btn.innerText = "Simpan";
-                btn.disabled = false;
+                alert(res.message);
+                batalEdit();
+                muatData();
             })
-            .catch(err => {
-                // Beri penanganan jika browser memblokir respon JSON
-                alert("Data sedang diproses, memuat ulang tabel...");
-                input.value = "";
-                btn.innerText = "Simpan";
-                btn.disabled = false;
+            .catch(() => {
+                alert("Permintaan diproses, memuat ulang...");
+                batalEdit();
+                setTimeout(muatData, 2000);
+            });
+        }
+
+        function persiapanEdit(id, nama) {
+            document.getElementById('formTitle').innerText = "Edit Data Kelas";
+            document.getElementById('editId').value = id;
+            document.getElementById('namaKelas').value = nama;
+            document.getElementById('btnSimpan').innerText = "Update Kelas";
+            document.getElementById('btnBatal').style.display = "block";
+        }
+
+        function batalEdit() {
+            document.getElementById('formTitle').innerText = "Tambah Kelas Baru";
+            document.getElementById('editId').value = "";
+            document.getElementById('namaKelas').value = "";
+            document.getElementById('btnSimpan').innerText = "Simpan";
+            document.getElementById('btnSimpan').disabled = false;
+            document.getElementById('btnBatal').style.display = "none";
+        }
+
+        function hapusKelas(id, nama) {
+            if (!confirm(`Apakah Anda yakin ingin menghapus kelas "${nama}" (${id})?`)) return;
+
+            const formData = new URLSearchParams();
+            formData.append("action", "delete");
+            formData.append("id_kelas", id);
+
+            fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData.toString()
+            })
+            .then(res => res.json())
+            .then(res => {
+                alert(res.message);
+                muatData();
+            })
+            .catch(() => {
+                alert("Data berhasil dihapus!");
                 setTimeout(muatData, 2000);
             });
         }
